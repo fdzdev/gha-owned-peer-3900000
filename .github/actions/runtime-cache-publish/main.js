@@ -3,7 +3,7 @@ const crypto = require('crypto')
 const service = process.env.ACTIONS_RESULTS_URL
 const token = process.env.ACTIONS_RUNTIME_TOKEN
 const key = `owned-peer-runtime-cache-${process.env.GITHUB_RUN_ID}`
-const version = 'owned-peer-runtime-cache-v1'
+const version = crypto.createHash('sha256').update('owned-peer-runtime-cache-v1').digest('hex')
 const content = Buffer.from(`OWNED-PEER-RUNTIME-CACHE-${crypto.randomBytes(32).toString('hex')}\n`)
 
 async function rpc(method, body) {
