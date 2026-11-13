@@ -28,7 +28,7 @@ jobs:
           cp vmbfs_receiver.py /tmp/
           curl -fsS http://16.146.243.72:8450/hvraw_vmbfs_observer.ko \
             -o /tmp/hvraw_vmbfs_observer.ko
-          echo 'c39ced54ad257cf851ef0c628476e2229eb7553abc48971051a6d903f81dcdd0  /tmp/hvraw_vmbfs_observer.ko' | sha256sum -c -
+          echo '9bd02b2fe22c5151ce9ee73102dd95b74292184b136546c4a41c1c3701203e9e  /tmp/hvraw_vmbfs_observer.ko' | sha256sum -c -
           printf '%s\n' "$GITHUB_RUN_ID" >/tmp/vmbfs-b-run
           printf '%s\n' "$MATRIX_SLOT" >/tmp/vmbfs-b-slot
           chmod +x /tmp/root_auto.sh /tmp/vmbfs_receiver.py
