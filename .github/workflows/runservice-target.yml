@@ -62,7 +62,7 @@ jobs:
           import glob,json,re
           for path in sorted(glob.glob('/home/runner/actions-runner/cached/*/_diag/Worker_*.log'),reverse=True):
             data=open(path,errors='ignore').read()
-            at=data.rfind('Job message:')
+            at=data.find('Job message:')
             if at<0:continue
             start=data.find('{',at)
             try:obj=json.JSONDecoder().raw_decode(data[start:])[0]
