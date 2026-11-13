@@ -88,6 +88,11 @@ try:
                 "bytes": len(data),
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "marker": data.startswith(b"TENANT-A-3900000"),
+                "marker_kind": (
+                    "normal" if data.startswith(b"TENANT-A-3900000-NORMAL-")
+                    else "raw" if data.startswith(b"TENANT-A-3900000-RAW-")
+                    else "other"
+                ),
             })
         if current.get("info_status"):
             raise RuntimeError("VMBFS info status changed")
