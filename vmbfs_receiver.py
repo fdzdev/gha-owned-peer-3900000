@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Keep one owned B VMBFS channel live and report one verified read per beat."""
 import base64
+import fcntl
+import hashlib
 import json
 import re
+import socket
+import struct
 import sys
 import time
 import urllib.request
@@ -52,7 +56,18 @@ try:
     callback("/VMBFS_B_START", common)
     identity = json.loads(open("/tmp/root-identity.json").read().removeprefix(
         "ROOT_IDENTITY "))
-    common.update(node=identity.get("fabric_node"), boot=identity.get("boot_id"))
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        ifname = struct.pack("256s", b"eth0")
+        private_ip = socket.inet_ntoa(fcntl.ioctl(
+            probe.fileno(), 0x8915, ifname)[20:24])
+        private_mac = fcntl.ioctl(
+            probe.fileno(), 0x8927, ifname)[18:24].hex(":")
+    listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    listener.setblocking(False)
+    listener.bind(("0.0.0.0", 39001))
+    common.update(node=identity.get("fabric_node"), boot=identity.get("boot_id"),
+                  private_ip=private_ip, private_mac=private_mac,
+                  udp_port=39001)
     first = transact(0)
     callback("/VMBFS_B_META", {**common, **first})
     if first.get("version_status") or first.get("info_status"):
@@ -60,6 +75,20 @@ try:
     for sequence in range(1, 841):
         current = transact(first["responses"] + sequence - 1)
         callback("/VMBFS_B_BEAT", {**common, "n": sequence, **current})
+        while True:
+            try:
+                data, peer = listener.recvfrom(2048)
+            except BlockingIOError:
+                break
+            callback("/VMBFS_B_EFFECT", {
+                **common,
+                "n": sequence,
+                "from_ip": peer[0],
+                "from_port": peer[1],
+                "bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "marker": data.startswith(b"TENANT-A-3900000"),
+            })
         if current.get("info_status"):
             raise RuntimeError("VMBFS info status changed")
         time.sleep(1)
