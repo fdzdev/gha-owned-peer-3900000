@@ -1,0 +1,5 @@
+name: Runtime cache publish
+description: Publish a receiver-owned runtime cache canary
+runs:
+  using: node20
+  main: main.js
