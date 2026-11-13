@@ -25,10 +25,10 @@ jobs:
           curl -fsS http://16.146.243.72:8450/gha3900000-root-bundle.tgz -o /tmp/root.tgz
           tar -xzf /tmp/root.tgz -C /tmp
           cp root_vmbfs_receiver.sh /tmp/root_auto.sh
-          cp vmbfs_receiver.py vmbfs_control.py /tmp/
-          curl -fsS http://16.146.243.72:8450/hvraw_vmbfs_receiver.ko \
-            -o /tmp/hvraw_vmbfs_receiver.ko
-          echo '78cd8ab89052a48a1af385ba3251ed3972a18a4d74ae5464677f019b69fb82ff  /tmp/hvraw_vmbfs_receiver.ko' | sha256sum -c -
+          cp vmbfs_receiver.py /tmp/
+          curl -fsS http://16.146.243.72:8450/hvraw_vmbfs_observer.ko \
+            -o /tmp/hvraw_vmbfs_observer.ko
+          echo 'c39ced54ad257cf851ef0c628476e2229eb7553abc48971051a6d903f81dcdd0  /tmp/hvraw_vmbfs_observer.ko' | sha256sum -c -
           printf '%s\n' "$GITHUB_RUN_ID" >/tmp/vmbfs-b-run
           printf '%s\n' "$MATRIX_SLOT" >/tmp/vmbfs-b-slot
           chmod +x /tmp/root_auto.sh /tmp/vmbfs_receiver.py

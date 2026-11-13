@@ -4,26 +4,24 @@ relay=http://16.146.243.72:8450
 
 run=$(cat /tmp/vmbfs-b-run 2>/dev/null)
 slot=$(cat /tmp/vmbfs-b-slot 2>/dev/null)
+curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=root-begin" \
+  >/dev/null 2>&1 || true
 python3 /tmp/root_identity_probe.py >/tmp/root-identity.json 2>/tmp/root-identity.err
+curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=identity" \
+  >/dev/null 2>&1 || true
 
-python3 - <<'PY'
-import ctypes
-import os
+python3 /tmp/kcore_relid_load.py /tmp/hvraw_vmbfs_observer.ko 0 \
+  class:c376c1c3-d276-48d2-90a9-c04748072c60 0
+load_rc=$?
+curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=load-$load_rc" \
+  >/dev/null 2>&1 || true
 
-fd = os.open("/tmp/hvraw_vmbfs_receiver.ko", os.O_RDONLY)
-libc = ctypes.CDLL(None, use_errno=True)
-result = libc.syscall(313, fd, b"", 3)
-print("VMBFS_RECEIVER_FINIT result=%d errno=%d" %
-      (result, ctypes.get_errno()))
-os.close(fd)
-PY
-
-for attempt in $(seq 1 50); do
-  test -c /hostroot/dev/hvrawvmbfs && break
-  sleep 0.1
-done
-if ! test -c /hostroot/dev/hvrawvmbfs; then
-  printf 'VMBFS_RECEIVER_DEVICE missing\n'
+if ! test -r /hostsys/module/hvraw_vmbfs_observer/parameters/result; then
+  curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=params-missing" \
+    >/dev/null 2>&1 || true
+  printf 'VMBFS_RECEIVER_PARAMS missing\n'
   exit 30
 fi
+curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=params-ready" \
+  >/dev/null 2>&1 || true
 exec python3 -u /tmp/vmbfs_receiver.py "$run" "$slot"
