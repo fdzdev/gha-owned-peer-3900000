@@ -2,6 +2,11 @@ name: Public peer exact public-A NVMe remanence reader
 
 on:
   workflow_dispatch:
+    inputs:
+      cohort:
+        description: Source cohort ID
+        required: true
+        type: string
 
 permissions: {}
 
@@ -26,13 +31,17 @@ jobs:
           } else {
             $serial = ($disk.SerialNumber -replace '[^0-9A-Fa-f_]', '').Trim('_')
             $index = @()
-            try {
-              $index = Invoke-RestMethod -TimeoutSec 20 -Uri "https://gist.githubusercontent.com/fdzdev/cb5385ff82eb8fbc16334a24be5b40ab/raw/remw-index.json?v=$env:GITHUB_RUN_ID-${{ matrix.sample }}"
-            } catch {}
-            $verdict = @{target='public-peer'; host=$hostName; serial=$serial; run=$env:GITHUB_RUN_ID; sample='${{ matrix.sample }}'; indexed=$index.Count; checked=0; matches=@()}
+            for ($poll = 0; $poll -lt 20; $poll++) {
+              try {
+                $index = Invoke-RestMethod -TimeoutSec 5 -Uri "http://16.146.243.72:8480/index?cohort=${{ inputs.cohort }}"
+              } catch { $index = @() }
+              if ($index | Where-Object serial -eq $serial) { break }
+              Start-Sleep -Seconds 3
+            }
+            $verdict = @{target='public-peer'; cohort='${{ inputs.cohort }}'; host=$hostName; serial=$serial; run=$env:GITHUB_RUN_ID; sample='${{ matrix.sample }}'; indexed=$index.Count; checked=0; matches=@()}
             $sha = [System.Security.Cryptography.SHA256]::Create()
             foreach ($manifest in $index) {
-              if ($manifest.source -ne 'public-a' -or $manifest.serial -ne $serial) { continue }
+              if ($manifest.serial -ne $serial) { continue }
               $verdict.checked++
               $raw = [System.IO.File]::Open("\\.\PHYSICALDRIVE$($disk.Number)", 'Open', 'Read', [System.IO.FileShare]::ReadWrite)
               $found = 0
