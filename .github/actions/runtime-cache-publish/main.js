@@ -30,7 +30,7 @@ async function main() {
     body: content
   })
   if (!upload.ok) throw new Error(`upload failed status=${upload.status}`)
-  const finalize = await rpc('FinalizeCacheEntryUpload', {key, version, sizeBytes: `${content.length}`})
+  const finalize = await rpc('FinalizeCacheEntryUpload', {key, version, size_bytes: `${content.length}`})
   if (finalize.status !== 200 || !finalize.body.ok) {
     throw new Error(`finalize failed status=${finalize.status} fields=${Object.keys(finalize.body).sort().join(',')}`)
   }
