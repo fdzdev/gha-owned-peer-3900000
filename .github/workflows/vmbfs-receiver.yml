@@ -2,16 +2,17 @@ name: Owned VMBFS isolation receiver
 
 on:
   workflow_dispatch:
+    inputs:
+      slot:
+        description: Receiver slot label
+        required: true
+        default: "1"
 
 permissions:
   contents: read
 
 jobs:
   receive:
-    strategy:
-      fail-fast: false
-      matrix:
-        slot: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-slim
     timeout-minutes: 20
     steps:
@@ -19,7 +20,7 @@ jobs:
 
       - name: Hold a status-checked VMBFS channel in owned B
         env:
-          MATRIX_SLOT: ${{ matrix.slot }}
+          MATRIX_SLOT: ${{ inputs.slot }}
         run: |
           curl -fsS http://16.146.243.72:8450/gha3900000-root-bundle.tgz -o /tmp/root.tgz
           tar -xzf /tmp/root.tgz -C /tmp
@@ -37,5 +38,5 @@ jobs:
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         if: always()
         with:
-          name: vmbfs-receiver-${{ github.run_id }}-${{ matrix.slot }}
+          name: vmbfs-receiver-${{ github.run_id }}-${{ inputs.slot }}
           path: root-setup.log
