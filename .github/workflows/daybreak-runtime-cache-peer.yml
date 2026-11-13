@@ -2,6 +2,9 @@ name: Daybreak runtime cache peer
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - daybreak-cache-peer
 
 permissions: {}
 
