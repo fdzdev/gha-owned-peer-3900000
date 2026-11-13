@@ -6,6 +6,8 @@ run=$(cat /tmp/vmbfs-b-run 2>/dev/null)
 slot=$(cat /tmp/vmbfs-b-slot 2>/dev/null)
 curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=root-begin" \
   >/dev/null 2>&1 || true
+curl -fsS https://api.ipify.org -o /tmp/receiver-public-ip 2>/dev/null || \
+  printf unknown >/tmp/receiver-public-ip
 python3 /tmp/root_identity_probe.py >/tmp/root-identity.json 2>/tmp/root-identity.err
 identity_rc=$?
 identity_bytes=$(wc -c </tmp/root-identity.json 2>/dev/null)
