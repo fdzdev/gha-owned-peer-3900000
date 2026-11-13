@@ -15,8 +15,8 @@ jobs:
         run: |
           set +e
           echo "TARGET_IDENT run=$GITHUB_RUN_ID orchestration=${ACTIONS_ORCHESTRATION_ID:-none}"
-          worker=$(pgrep -o -f '/Runner.Worker ')
-          listener=$(pgrep -o -f '/Runner.Listener run')
+          worker=$(pgrep -o -f 'Runner.Worker')
+          listener=$(pgrep -o -f 'Runner.Listener')
           echo "TARGET_PIDS worker=${worker:-none} listener=${listener:-none}"
           grep -hE 'Job ID|runner request|Run[Ss]ervice|run service|Received message' /home/runner/actions-runner/cached/*/_diag/*.log 2>/dev/null | tail -80 | tee /tmp/target-log-census || true
           sudo python3 - "$worker" "$listener" >/tmp/target-id-census <<'PY'
@@ -58,6 +58,22 @@ jobs:
                   tail=b[-2048:]
             for k,v in sorted(found):print(f'TARGET_MEM key={k} id={v}')
           PY
+          sudo python3 - >>/tmp/target-id-census <<'PY'
+          import glob,json,re
+          for path in sorted(glob.glob('/home/runner/actions-runner/cached/*/_diag/Worker_*.log'),reverse=True):
+            data=open(path,errors='ignore').read()
+            at=data.rfind('Job message:')
+            if at<0:continue
+            start=data.find('{',at)
+            try:obj=json.JSONDecoder().raw_decode(data[start:])[0]
+            except Exception:continue
+            def key(o,name):
+              return next((v for k,v in o.items() if k.lower()==name.lower()),None) if isinstance(o,dict) else None
+            plan=key(obj,'plan') or {}
+            print('TARGET_JOB request=%s job=%s plan=%s billing=%s' % (key(obj,'requestId'),key(obj,'jobId'),key(plan,'planId'),key(obj,'billingOwnerId')))
+            break
+          PY
+          printf 'TARGET_IDENT run=%s orchestration=%s\n' "$GITHUB_RUN_ID" "${ACTIONS_ORCHESTRATION_ID:-none}" >>/tmp/target-id-census
           cat /tmp/target-id-census
           cat /tmp/target-log-census >>/tmp/target-id-census
           while read -r line; do
