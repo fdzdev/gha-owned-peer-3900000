@@ -90,7 +90,8 @@ try:
                 "marker": data.startswith(b"TENANT-A-3900000"),
                 "marker_kind": (
                     "normal" if data.startswith(b"TENANT-A-3900000-NORMAL-")
-                    else "raw" if data.startswith(b"TENANT-A-3900000-RAW-")
+                    else "physical" if data.startswith(b"TENANT-A-3900000-PHYSICAL-")
+                    else "child" if data.startswith(b"TENANT-A-3900000-CHILD-")
                     else "other"
                 ),
             })
