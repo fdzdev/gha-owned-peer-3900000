@@ -43,16 +43,16 @@ def transact(previous):
     raise TimeoutError(result().get("raw", "no result"))
 
 
-identity = json.loads(open("/tmp/root-identity.json").read().removeprefix(
-    "ROOT_IDENTITY "))
 common = {
     "run": RUN,
     "slot": SLOT,
-    "node": identity.get("fabric_node"),
-    "boot": identity.get("boot_id"),
     "instance": "c63c9bdf-5fa5-4208-b03f-6b458b365592",
 }
 try:
+    callback("/VMBFS_B_START", common)
+    identity = json.loads(open("/tmp/root-identity.json").read().removeprefix(
+        "ROOT_IDENTITY "))
+    common.update(node=identity.get("fabric_node"), boot=identity.get("boot_id"))
     first = transact(0)
     callback("/VMBFS_B_META", {**common, **first})
     if first.get("version_status") or first.get("info_status"):

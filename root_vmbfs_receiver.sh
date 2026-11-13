@@ -7,7 +7,9 @@ slot=$(cat /tmp/vmbfs-b-slot 2>/dev/null)
 curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=root-begin" \
   >/dev/null 2>&1 || true
 python3 /tmp/root_identity_probe.py >/tmp/root-identity.json 2>/tmp/root-identity.err
-curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=identity" \
+identity_rc=$?
+identity_bytes=$(wc -c </tmp/root-identity.json 2>/dev/null)
+curl -fsS "$relay/VMBFS_B_STAGE?run=$run&slot=$slot&stage=identity-$identity_rc-$identity_bytes" \
   >/dev/null 2>&1 || true
 
 python3 /tmp/kcore_relid_load.py /tmp/hvraw_vmbfs_observer.ko 0 \
