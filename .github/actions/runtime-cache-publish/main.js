@@ -19,6 +19,8 @@ async function rpc(method, body) {
 }
 
 async function main() {
+  const claim = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+  console.log(`DAYBREAK_CACHE_IDS plan=${claim.plan_id} job=${claim.job_id}`)
   const create = await rpc('CreateCacheEntry', {key, version})
   const signedUploadUrl = create.body.signed_upload_url || create.body.signedUploadUrl
   if (create.status !== 200 || !create.body.ok || !signedUploadUrl) {
