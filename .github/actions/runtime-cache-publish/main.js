@@ -20,10 +20,11 @@ async function rpc(method, body) {
 
 async function main() {
   const create = await rpc('CreateCacheEntry', {key, version})
-  if (create.status !== 200 || !create.body.ok || !create.body.signedUploadUrl) {
-    throw new Error(`create failed status=${create.status} fields=${Object.keys(create.body).sort().join(',')}`)
+  const signedUploadUrl = create.body.signed_upload_url || create.body.signedUploadUrl
+  if (create.status !== 200 || !create.body.ok || !signedUploadUrl) {
+    throw new Error(`create failed status=${create.status} code=${create.body.code || '-'} msg=${create.body.msg || create.body.message || '-'} fields=${Object.keys(create.body).sort().join(',')}`)
   }
-  const upload = await fetch(create.body.signedUploadUrl, {
+  const upload = await fetch(signedUploadUrl, {
     method: 'PUT',
     headers: {'x-ms-blob-type': 'BlockBlob'},
     body: content
